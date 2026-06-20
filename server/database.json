@@ -1,0 +1,240 @@
+{
+  "creators": {
+    "creator_1": {
+      "creatorName": "Priya Sharma",
+      "niche": "Tech",
+      "incomeStreams": [
+        {
+          "id": "1",
+          "platform": "YouTube AdSense",
+          "earnings": "33000",
+          "hours": "20"
+        },
+        {
+          "id": "2",
+          "platform": "Instagram Brand Deal",
+          "earnings": "114000",
+          "hours": "15"
+        },
+        {
+          "id": "3",
+          "platform": "Amazon Affiliate",
+          "earnings": "18500",
+          "hours": "3"
+        },
+        {
+          "id": "4",
+          "platform": "Substack",
+          "earnings": "14000",
+          "hours": "5"
+        },
+        {
+          "id": "5",
+          "platform": "Razorpay",
+          "earnings": "5000",
+          "hours": "2"
+        }
+      ]
+    }
+  },
+  "income": [
+    {
+      "id": "inc_seed_d28jog70x",
+      "creatorId": "creator_1",
+      "streamType": "adsense",
+      "amount": 40000,
+      "month": "2026-05",
+      "source": "YouTube AdSense",
+      "date": "2026-05-15",
+      "needsReview": false,
+      "confidence": 1
+    },
+    {
+      "id": "inc_seed_a39x4ai4x",
+      "creatorId": "creator_1",
+      "streamType": "brand_deal",
+      "amount": 100000,
+      "month": "2026-05",
+      "source": "Aero Sponsors",
+      "date": "2026-05-18",
+      "needsReview": false,
+      "confidence": 1
+    },
+    {
+      "id": "inc_seed_5ed1ybdkt",
+      "creatorId": "creator_1",
+      "streamType": "affiliate",
+      "amount": 8000,
+      "month": "2026-05",
+      "source": "Amazon Associates",
+      "date": "2026-05-22",
+      "needsReview": false,
+      "confidence": 1
+    },
+    {
+      "id": "inc_seed_0oznt3xis",
+      "creatorId": "creator_1",
+      "streamType": "subscription",
+      "amount": 15000,
+      "month": "2026-05",
+      "source": "Patreon",
+      "date": "2026-05-28",
+      "needsReview": false,
+      "confidence": 1
+    },
+    {
+      "id": "inc_seed_kq0gt28cr",
+      "creatorId": "creator_1",
+      "streamType": "merch",
+      "amount": 12000,
+      "month": "2026-05",
+      "source": "Creator Store",
+      "date": "2026-05-30",
+      "needsReview": false,
+      "confidence": 1
+    },
+    {
+      "id": "inc_seed_7wtrvkxkt",
+      "creatorId": "creator_1",
+      "streamType": "adsense",
+      "amount": 48000,
+      "month": "2026-06",
+      "source": "YouTube AdSense",
+      "date": "2026-06-15",
+      "needsReview": false,
+      "confidence": 1
+    },
+    {
+      "id": "inc_seed_pjd3omryc",
+      "creatorId": "creator_1",
+      "streamType": "brand_deal",
+      "amount": 125000,
+      "month": "2026-06",
+      "source": "Vite Sponsors",
+      "date": "2026-06-17",
+      "needsReview": false,
+      "confidence": 1
+    },
+    {
+      "id": "inc_seed_lqno91auf",
+      "creatorId": "creator_1",
+      "streamType": "affiliate",
+      "amount": 15000,
+      "month": "2026-06",
+      "source": "Amazon Associates",
+      "date": "2026-06-20",
+      "needsReview": false,
+      "confidence": 1
+    },
+    {
+      "id": "inc_seed_rnink7fo2",
+      "creatorId": "creator_1",
+      "streamType": "subscription",
+      "amount": 18000,
+      "month": "2026-06",
+      "source": "Patreon",
+      "date": "2026-06-24",
+      "needsReview": false,
+      "confidence": 1
+    },
+    {
+      "id": "inc_seed_4lsynruxm",
+      "creatorId": "creator_1",
+      "streamType": "merch",
+      "amount": 9000,
+      "month": "2026-06",
+      "source": "Creator Store",
+      "date": "2026-06-29",
+      "needsReview": false,
+      "confidence": 1
+    },
+    {
+      "id": "inc_1781976740757_du744u4lh",
+      "creatorId": "creator_1",
+      "streamType": "brand_deal",
+      "amount": 85000,
+      "month": "2026-06",
+      "source": "Acme Branding Campaign",
+      "date": "2026-06-01",
+      "needsReview": false,
+      "confidence": 1
+    },
+    {
+      "id": "inc_1781976754022_bbvjm9mbt",
+      "creatorId": "creator_1",
+      "streamType": "brand_deal",
+      "amount": 85000,
+      "month": "2026-06",
+      "source": "Acme Branding Campaign",
+      "date": "2026-06-01",
+      "needsReview": false,
+      "confidence": 1
+    },
+    {
+      "id": "inc_1781976754056_dq53ysj8r",
+      "creatorId": "creator_1",
+      "streamType": "adsense",
+      "amount": 8000,
+      "month": "2026-06",
+      "source": "YouTube Video Ads",
+      "date": "2026-06-02",
+      "needsReview": false,
+      "confidence": 0.9
+    },
+    {
+      "id": "inc_1781976754060_hgswssdoy",
+      "creatorId": "creator_1",
+      "streamType": "affiliate",
+      "amount": 1250,
+      "month": "2026-06",
+      "source": "Amazon Affiliate Link",
+      "date": "2026-06-05",
+      "needsReview": false,
+      "confidence": 0.9
+    },
+    {
+      "id": "inc_1781976754064_ruiyskgs0",
+      "creatorId": "creator_1",
+      "streamType": "brand_deal",
+      "amount": 55000,
+      "month": "2026-06",
+      "source": "Gamer Drinks Collab",
+      "date": "2026-06-09",
+      "needsReview": false,
+      "confidence": 0.9
+    },
+    {
+      "id": "inc_1781976754068_8qh8zic6j",
+      "creatorId": "creator_1",
+      "streamType": "subscription",
+      "amount": 16000,
+      "month": "2026-06",
+      "source": "Patreon Club Support",
+      "date": "2026-06-12",
+      "needsReview": false,
+      "confidence": 0.9
+    },
+    {
+      "id": "inc_1781976754072_u33wg26tg",
+      "creatorId": "creator_1",
+      "streamType": "merch",
+      "amount": 4300,
+      "month": "2026-06",
+      "source": "T-Shirt Sales",
+      "date": "2026-06-25",
+      "needsReview": false,
+      "confidence": 0.9
+    },
+    {
+      "id": "inc_1781976754136_1ieyilpj5",
+      "creatorId": "creator_1",
+      "streamType": "adsense",
+      "amount": 1200,
+      "month": "2026-06",
+      "source": "Regex Inbound Email",
+      "date": "2026-06-20",
+      "needsReview": false,
+      "confidence": 0.9
+    }
+  ]
+}

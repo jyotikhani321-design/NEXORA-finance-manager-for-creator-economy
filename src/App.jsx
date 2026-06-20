@@ -196,6 +196,130 @@ export default function App() {
   // Modal control: 'rateCard' | 'diversification' | 'tax' | null
   const [activeModal, setActiveModal] = useState(null);
 
+  // Hackathon Import State Variables
+  const [csvFile, setCsvFile] = useState(null);
+  const [screenshotFile, setScreenshotFile] = useState(null);
+  const [emailText, setEmailText] = useState('');
+  const [emailSender, setEmailSender] = useState('sponsor@brand.com');
+  const [isImporting, setIsImporting] = useState(false);
+  const [importSummary, setImportSummary] = useState(null);
+
+  // Helper to map DB stream types to UI dropdown options
+  const mapBackendToDropdown = (type) => {
+    switch (type) {
+      case 'brand_deal': return 'Instagram Brand Deal';
+      case 'adsense': return 'YouTube AdSense';
+      case 'affiliate': return 'Amazon Affiliate';
+      case 'subscription': return 'Patreon';
+      case 'merch': return 'Manual Entry';
+      default: return 'Manual Entry';
+    }
+  };
+
+  const handleCsvUpload = async () => {
+    if (!csvFile) {
+      alert("Please choose a CSV file first.");
+      return;
+    }
+    setIsImporting(true);
+    setImportSummary(null);
+    const formData = new FormData();
+    formData.append('file', csvFile);
+    formData.append('creatorId', 'creator_1');
+
+    try {
+      const response = await fetch('http://localhost:5000/api/income/csv-upload', {
+        method: 'POST',
+        body: formData
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setImportSummary(data.summary);
+        alert(`CSV Import successful! Ingested ${data.summary.rowsProcessed} records. Please click "Analyze My Income" to see the updated advisor recommendations and stability score!`);
+      } else {
+        const errorData = await response.json();
+        alert(`CSV Import failed: ${errorData.error}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('CSV Import connection error.');
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleScreenshotUpload = async () => {
+    if (!screenshotFile) {
+      alert("Please choose an image screenshot file first.");
+      return;
+    }
+    setIsImporting(true);
+    const formData = new FormData();
+    formData.append('image', screenshotFile);
+    formData.append('creatorId', 'creator_1');
+
+    try {
+      const response = await fetch('http://localhost:5000/api/income/screenshot', {
+        method: 'POST',
+        body: formData
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.needsReview) {
+          alert(`OCR flagged for Review! Image text was unclear, record created with ₹0 (needs manual review). Please click "Analyze My Income" to update the dashboard.`);
+        } else {
+          alert(`Local OCR complete! Extracted ₹${data.amount} for category: ${data.streamType}. Please click "Analyze My Income" to update the dashboard.`);
+        }
+      } else {
+        const errorData = await response.json();
+        alert(`Screenshot upload failed: ${errorData.error}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('OCR connection error.');
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleEmailWebhookSim = async () => {
+    if (!emailText.trim()) {
+      alert("Please enter some email content first.");
+      return;
+    }
+    setIsImporting(true);
+
+    try {
+      const response = await fetch('http://localhost:5000/api/income/email-webhook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: emailSender,
+          subject: 'Payment Confirmation Detail',
+          bodyText: emailText,
+          creatorId: 'creator_1'
+        })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.needsReview) {
+          alert(`Webhook parsed (needs review): Extracted amount: ${data.amount} (confidence: ${data.confidence}). Please click "Analyze My Income" to update the dashboard.`);
+        } else {
+          alert(`Webhook parsed with high confidence! Ingested amount: ${data.amount} (category: ${data.streamType}). Please click "Analyze My Income" to update the dashboard.`);
+        }
+        setEmailText('');
+      } else {
+        const errorData = await response.json();
+        alert(`Email Ingestion failed: ${errorData.error}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Email Sim connection error.');
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   // Cycle through loading messages while AI is working
   const loadingMessages = [
     "Analyzing your income streams...",
@@ -215,6 +339,31 @@ export default function App() {
     }
     return () => clearInterval(interval);
   }, [isLoadingAI]);
+
+  // Load saved profile data from backend database on startup
+  useEffect(() => {
+    async function loadSavedData() {
+      try {
+        const response = await fetch('http://localhost:5000/api/creator');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.creatorName) {
+            setCreatorName(data.creatorName);
+          }
+          if (data.niche) {
+            setNiche(data.niche);
+          }
+          if (data.incomeStreams && data.incomeStreams.length > 0) {
+            setIncomeStreams(data.incomeStreams);
+          }
+          console.log('Successfully loaded profile data from server');
+        }
+      } catch (error) {
+        console.warn('Backend server not detected or offline. Using local frontend-only state.', error);
+      }
+    }
+    loadSavedData();
+  }, []);
 
   // Handle stream list modifications
   const addStreamRow = () => {
@@ -250,7 +399,7 @@ export default function App() {
   };
 
   // Clear data and reset
-  const handleResetData = () => {
+  const handleResetData = async () => {
     setCreatorName('');
     setIncomeStreams([
       { id: '1', platform: '', earnings: '', hours: '' },
@@ -258,6 +407,16 @@ export default function App() {
       { id: '3', platform: '', earnings: '', hours: '' }
     ]);
     setAiRecommendations([]);
+    try {
+      await fetch("http://localhost:5000/api/creator", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ creatorName: '', niche: 'Tech', incomeStreams: [] })
+      });
+      console.log("Creator profile reset on backend.");
+    } catch (err) {
+      console.warn("Could not reset creator profile on server:", err);
+    }
   };
 
   // Calculations for dashboard
@@ -359,6 +518,33 @@ export default function App() {
     setIsLoadingAI(true);
     setScreen('dashboard');
 
+    // 1. Sync any newly added manual streams to SQLite first
+    for (const stream of incomeStreams) {
+      if (stream.platform && Number(stream.earnings) > 0) {
+        // If the ID is a simple local index (not starting with 'inc_'), it's a new manual stream
+        if (!stream.id.startsWith('inc_')) {
+          try {
+            const mappedStreamType = mapDropdownToBackend(stream.platform);
+            await fetch("http://localhost:5000/api/income/manual", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                creatorId: 'creator_1',
+                streamType: mappedStreamType,
+                amount: parseFloat(stream.earnings),
+                month: '2026-06',
+                source: stream.platform,
+                date: new Date().toISOString().split('T')[0]
+              })
+            });
+            console.log(`Synced new manual stream to SQLite: ${stream.platform}`);
+          } catch (err) {
+            console.warn("Could not sync manual stream to server:", err);
+          }
+        }
+      }
+    }
+
     const formattedName = creatorName || 'Creator';
     const topStreamName = topStream.platform;
     const topStreamAmount = topStream.earnings;
@@ -374,57 +560,39 @@ Affiliate income: ₹${affiliateIncome} (${affiliatePct.toFixed(1)}% of total)
 Niche benchmark: ₹${nicheBenchmark}
 ₹/hour by stream: ${JSON.stringify(validStreams.map(s => ({ platform: s.platform, rate: Math.round(Number(s.earnings) / (Number(s.hours) || 1)) })))}`;
 
-    if (apiKey.trim() !== '') {
-      try {
-        const response = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: { 
-            "Content-Type": "application/json",
-            "x-api-key": apiKey.trim(),
-            "anthropic-version": "2023-06-01",
-            "anthropic-dangerously-allow-browser": "true"
-          },
-          body: JSON.stringify({
-            model: "claude-3-5-sonnet-20241022",
-            max_tokens: 1000,
-            system: SYSTEM_PROMPT,
-            messages: [{ role: "user", content: userMessage }]
-          })
-        });
+    // 2. Save profile legacy info to backend
+    try {
+      await fetch("http://localhost:5000/api/creator", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ creatorName, niche, incomeStreams })
+      });
+      console.log("Creator profile saved to backend.");
+    } catch (err) {
+      console.warn("Could not save creator profile to server (server may be offline):", err);
+    }
 
-        if (!response.ok) {
-          throw new Error(`HTTP Error: ${response.status}`);
-        }
+    // 3. Try to get recommendations from offline backend
+    let recommendationsObtained = false;
+    
+    try {
+      const response = await fetch("http://localhost:5000/api/recommendations/creator_1");
 
+      if (response.ok) {
         const data = await response.json();
-        const text = data.content[0].text;
-        
-        const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        const parsed = JSON.parse(cleanText);
-        
-        if (Array.isArray(parsed) && parsed.length === 3) {
-          setAiRecommendations(parsed);
+        if (data.recommendations && Array.isArray(data.recommendations)) {
+          setAiRecommendations(data.recommendations);
           setIsUsingFallback(false);
-        } else {
-          throw new Error("Invalid recommendations array size");
+          recommendationsObtained = true;
+          console.log("Offline recommendations loaded from backend rules engine.");
         }
-      } catch (err) {
-        console.error("API Fetch / Parse Error:", err);
-        const fallbackRecs = generateLocalRecommendations(
-          formattedName, 
-          niche, 
-          validStreams.map(s => ({ platform: s.platform, earnings: Number(s.earnings), hours: Number(s.hours) })), 
-          totalEarnings, 
-          topStream, 
-          recurringIncome, 
-          brandDealIncome, 
-          affiliateIncome, 
-          nicheBenchmark
-        );
-        setAiRecommendations(fallbackRecs);
-        setIsUsingFallback(true);
       }
-    } else {
+    } catch (err) {
+      console.warn("Failed to get recommendations from backend. Falling back...", err);
+    }
+
+    // 4. Final Fallback: Generate local recommendations in the browser if server offline
+    if (!recommendationsObtained) {
       await new Promise(resolve => setTimeout(resolve, 2000));
       const fallbackRecs = generateLocalRecommendations(
         formattedName, 
@@ -812,7 +980,7 @@ Niche benchmark: ₹${nicheBenchmark}
           SCREEN 2 — INCOME INPUT PAGE
           =================================================== */}
       {screen === 'input' && (
-        <div className="max-w-4xl mx-auto px-4 py-12 fade-in flex flex-col min-h-[80vh]">
+        <div className="max-w-6xl mx-auto px-4 py-12 fade-in flex flex-col min-h-[80vh]">
           
           {/* Header section with details and loaders */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-6 border-b border-borderGray mb-8 text-left">
@@ -844,111 +1012,261 @@ Niche benchmark: ₹${nicheBenchmark}
             </div>
           </div>
 
-          {/* Stream Builders */}
-          <div className="bg-cardBg border border-borderGray rounded-xl p-6 space-y-6 shadow-sm">
+          {/* Grid Layout: Stream Builder vs Offline Ingestion */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             
-            {/* Stream headers on desktop */}
-            <div className="hidden sm:grid grid-cols-12 gap-4 pb-2 border-b border-borderGray/50 text-[10px] font-bold text-mutedText uppercase tracking-wider text-left">
-              <div className="col-span-5">Income Source</div>
-              <div className="col-span-3">Monthly Earnings (₹)</div>
-              <div className="col-span-3">Hours spent / month</div>
-              <div className="col-span-1 text-center">Delete</div>
-            </div>
+            {/* Left Column: Manual stream builder */}
+            <div className="lg:col-span-7 bg-cardBg border border-borderGray rounded-xl p-6 space-y-6 shadow-sm">
+              
+              {/* Stream headers on desktop */}
+              <div className="hidden sm:grid grid-cols-12 gap-4 pb-2 border-b border-borderGray/50 text-[10px] font-bold text-mutedText uppercase tracking-wider text-left">
+                <div className="col-span-5">Income Source</div>
+                <div className="col-span-3">Monthly Earnings (₹)</div>
+                <div className="col-span-3">Hours spent / month</div>
+                <div className="col-span-1 text-center">Delete</div>
+              </div>
 
-            {/* List */}
-            <div className="space-y-3">
-              {incomeStreams.map((stream, idx) => (
-                <div key={stream.id} className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center bg-background/50 p-4 sm:p-2.5 rounded-lg border border-borderGray hover:border-accentGold/20 transition-all">
-                  
-                  {/* Platform dropdown */}
-                  <div className="col-span-1 sm:col-span-5 text-left">
-                    <label className="block sm:hidden text-[10px] font-bold text-mutedText uppercase mb-1">
-                      Income Source
-                    </label>
-                    <div className="relative">
-                      <select 
-                        value={stream.platform}
-                        onChange={(e) => updateStreamField(stream.id, 'platform', e.target.value)}
-                        className="w-full appearance-none px-3 py-2 rounded border border-borderGray bg-background text-whiteText text-xs focus:outline-none focus:border-accentGold"
-                      >
-                        <option value="" disabled>Select Platform</option>
-                        {PLATFORMS.map(p => (
-                          <option key={p} value={p}>{p}</option>
-                        ))}
-                      </select>
-                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-mutedText text-[9px]">
-                        ▼
+              {/* List */}
+              <div className="space-y-3">
+                {incomeStreams.map((stream, idx) => (
+                  <div key={stream.id} className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center bg-background/50 p-4 sm:p-2.5 rounded-lg border border-borderGray hover:border-accentGold/20 transition-all">
+                    
+                    {/* Platform dropdown */}
+                    <div className="col-span-1 sm:col-span-5 text-left">
+                      <label className="block sm:hidden text-[10px] font-bold text-mutedText uppercase mb-1">
+                        Income Source
+                      </label>
+                      <div className="relative">
+                        <select 
+                          value={stream.platform}
+                          onChange={(e) => updateStreamField(stream.id, 'platform', e.target.value)}
+                          className="w-full appearance-none px-3 py-2 rounded border border-borderGray bg-background text-whiteText text-xs focus:outline-none focus:border-accentGold"
+                        >
+                          <option value="" disabled>Select Platform</option>
+                          {PLATFORMS.map(p => (
+                            <option key={p} value={p}>{p}</option>
+                          ))}
+                        </select>
+                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-mutedText text-[9px]">
+                          ▼
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Monthly earnings */}
-                  <div className="col-span-1 sm:col-span-3 text-left">
-                    <label className="block sm:hidden text-[10px] font-bold text-mutedText uppercase mb-1">
-                      Monthly Earnings (₹)
-                    </label>
-                    <div className="relative">
-                      <span className="absolute left-3 inset-y-0 flex items-center text-mutedText text-xs font-semibold">
-                        ₹
-                      </span>
+                    {/* Monthly earnings */}
+                    <div className="col-span-1 sm:col-span-3 text-left">
+                      <label className="block sm:hidden text-[10px] font-bold text-mutedText uppercase mb-1">
+                        Monthly Earnings (₹)
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 inset-y-0 flex items-center text-mutedText text-xs font-semibold">
+                          ₹
+                        </span>
+                        <input 
+                          type="number" 
+                          placeholder="Earnings" 
+                          value={stream.earnings}
+                          onChange={(e) => updateStreamField(stream.id, 'earnings', e.target.value)}
+                          className="w-full pl-6 pr-3 py-2 rounded border border-borderGray bg-background text-whiteText text-xs focus:outline-none focus:border-accentGold"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Hours spent */}
+                    <div className="col-span-1 sm:col-span-3 text-left">
+                      <label className="block sm:hidden text-[10px] font-bold text-mutedText uppercase mb-1">
+                        Hours spent / month
+                      </label>
                       <input 
                         type="number" 
-                        placeholder="Earnings" 
-                        value={stream.earnings}
-                        onChange={(e) => updateStreamField(stream.id, 'earnings', e.target.value)}
-                        className="w-full pl-6 pr-3 py-2 rounded border border-borderGray bg-background text-whiteText text-xs focus:outline-none focus:border-accentGold"
+                        placeholder="Hours" 
+                        value={stream.hours}
+                        onChange={(e) => updateStreamField(stream.id, 'hours', e.target.value)}
+                        className="w-full px-3 py-2 rounded border border-borderGray bg-background text-whiteText text-xs focus:outline-none focus:border-accentGold"
                       />
                     </div>
-                  </div>
 
-                  {/* Hours spent */}
-                  <div className="col-span-1 sm:col-span-3 text-left">
-                    <label className="block sm:hidden text-[10px] font-bold text-mutedText uppercase mb-1">
-                      Hours spent / month
-                    </label>
+                    {/* Delete button */}
+                    <div className="col-span-1 sm:col-span-1 flex justify-end sm:justify-center">
+                      <button 
+                        onClick={() => deleteStreamRow(stream.id)}
+                        className="p-1.5 text-[#EF4444] hover:bg-red-500/10 rounded transition-colors"
+                        title="Delete stream"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Add row button */}
+              <div className="flex gap-2">
+                <button 
+                  onClick={addStreamRow}
+                  className="flex-1 py-2.5 flex items-center justify-center gap-1.5 border border-dashed border-accentGold/30 hover:border-accentGold rounded-lg text-accentGold bg-cardBg/10 text-xs font-bold transition-all"
+                >
+                  <Plus size={14} />
+                  <span>Add Income Source</span>
+                </button>
+
+                <button 
+                  onClick={handleResetData}
+                  className="px-4 border border-borderGray hover:bg-cardBg/30 text-mutedText hover:text-whiteText text-xs font-bold rounded-lg transition-colors"
+                >
+                  Reset List
+                </button>
+              </div>
+            </div>
+
+            {/* Right Column: Hackathon Offline Ingestion Tools */}
+            <div className="lg:col-span-5 space-y-6 text-left">
+              
+              {/* CSV Upload Card */}
+              <div className="bg-cardBg border border-borderGray rounded-xl p-6 shadow-sm space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b border-borderGray/50">
+                  <span className="text-xl">📁</span>
+                  <div>
+                    <h3 className="text-sm font-bold text-whiteText">Fuzzy CSV Batch Import</h3>
+                    <p className="text-[10px] text-mutedText">Parses CSV locally and fuzzy-maps category synonym groups</p>
+                  </div>
+                </div>
+                
+                <div className="space-y-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[9px] font-bold text-mutedText uppercase">Select CSV File</label>
                     <input 
-                      type="number" 
-                      placeholder="Hours" 
-                      value={stream.hours}
-                      onChange={(e) => updateStreamField(stream.id, 'hours', e.target.value)}
-                      className="w-full px-3 py-2 rounded border border-borderGray bg-background text-whiteText text-xs focus:outline-none focus:border-accentGold"
+                      type="file" 
+                      accept=".csv"
+                      onChange={(e) => setCsvFile(e.target.files[0])}
+                      className="w-full text-xs text-mutedText file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-[10px] file:font-semibold file:bg-accentGold file:text-background hover:file:opacity-90 cursor-pointer"
                     />
                   </div>
 
-                  {/* Delete button */}
-                  <div className="col-span-1 sm:col-span-1 flex justify-end sm:justify-center">
-                    <button 
-                      onClick={() => deleteStreamRow(stream.id)}
-                      className="p-1.5 text-[#EF4444] hover:bg-red-500/10 rounded transition-colors"
-                      title="Delete stream"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                  <button 
+                    onClick={handleCsvUpload}
+                    disabled={isImporting}
+                    className="w-full py-2 bg-cardBgSecondary hover:bg-opacity-80 border border-borderGrayLight text-whiteText text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+                  >
+                    {isImporting ? 'Processing...' : 'Upload & Import CSV'}
+                  </button>
+
+                  {importSummary && (
+                    <div className="p-3 rounded-lg bg-background/50 border border-borderGray text-[10px] space-y-1">
+                      <div className="font-bold text-accentGold">Import Summary:</div>
+                      <div>• Rows Processed: <span className="text-whiteText font-semibold">{importSummary.rowsProcessed}</span></div>
+                      <div>• Rows Failed: <span className="text-whiteText font-semibold">{importSummary.rowsFailed}</span></div>
+                      <div>• Total Ingested: <span className="text-whiteText font-semibold">₹{importSummary.totalAmountImported.toLocaleString('en-IN')}</span></div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Screenshot OCR Card */}
+              <div className="bg-cardBg border border-borderGray rounded-xl p-6 shadow-sm space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b border-borderGray/50">
+                  <span className="text-xl">📸</span>
+                  <div>
+                    <h3 className="text-sm font-bold text-whiteText">Screenshot OCR (Tesseract.js)</h3>
+                    <p className="text-[10px] text-mutedText">Converts text via local WebAssembly OCR and runs rule extraction</p>
                   </div>
                 </div>
-              ))}
+
+                <div className="space-y-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[9px] font-bold text-mutedText uppercase">Select Image Screenshot</label>
+                    <input 
+                      type="file" 
+                      accept="image/*"
+                      onChange={(e) => setScreenshotFile(e.target.files[0])}
+                      className="w-full text-xs text-mutedText file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-[10px] file:font-semibold file:bg-accentGold file:text-background hover:file:opacity-90 cursor-pointer"
+                    />
+                  </div>
+
+                  <button 
+                    onClick={handleScreenshotUpload}
+                    disabled={isImporting}
+                    className="w-full py-2 bg-cardBgSecondary hover:bg-opacity-80 border border-borderGrayLight text-whiteText text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+                  >
+                    {isImporting ? 'Extracting OCR...' : 'Analyze Screenshot'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Inbound Email Sim Card */}
+              <div className="bg-cardBg border border-borderGray rounded-xl p-6 shadow-sm space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b border-borderGray/50">
+                  <span className="text-xl">📧</span>
+                  <div>
+                    <h3 className="text-sm font-bold text-whiteText">Inbound Email Parser</h3>
+                    <p className="text-[10px] text-mutedText">Simulates inbound mail webhook using Compromise NLP</p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex gap-2">
+                    <div className="flex-1 flex flex-col gap-1">
+                      <label className="text-[9px] font-bold text-mutedText uppercase">Sender Email</label>
+                      <input 
+                        type="text" 
+                        value={emailSender} 
+                        onChange={(e) => setEmailSender(e.target.value)}
+                        placeholder="sponsor@domain.com"
+                        className="w-full px-3 py-1.5 rounded border border-borderGray bg-background text-whiteText text-xs focus:outline-none focus:border-accentGold"
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <button 
+                        onClick={() => setEmailSender('adsense-noreply@google.com')}
+                        className="px-2 py-1.5 bg-[#27272A] border border-borderGray rounded text-[9px] font-bold hover:text-whiteText text-mutedText"
+                        title="Load google.com sender"
+                      >
+                        YouTube Domain
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[9px] font-bold text-mutedText uppercase">Email Message Body</label>
+                    <textarea 
+                      rows={3}
+                      value={emailText} 
+                      onChange={(e) => setEmailText(e.target.value)}
+                      placeholder="Paste payment alert text here..."
+                      className="w-full px-3 py-2 rounded border border-borderGray bg-background text-whiteText text-xs focus:outline-none focus:border-accentGold placeholder:text-mutedText/30"
+                    />
+                  </div>
+
+                  <div className="flex gap-1.5">
+                    <button 
+                      onClick={() => setEmailText('Dear creator_1, we have sent a transfer of $1500 for the YouTube collaboration.')}
+                      className="flex-1 py-1 bg-[#27272A] hover:bg-[#3F3F46] text-mutedText hover:text-whiteText text-[9px] font-bold rounded border border-borderGray"
+                    >
+                      Template A
+                    </button>
+                    <button 
+                      onClick={() => setEmailText('Campaign finished. The sponsor paid us ₹60,000 for the brand collab. Over 15k views recorded!')}
+                      className="flex-1 py-1 bg-[#27272A] hover:bg-[#3F3F46] text-mutedText hover:text-whiteText text-[9px] font-bold rounded border border-borderGray"
+                    >
+                      Template B (NLP)
+                    </button>
+                  </div>
+
+                  <button 
+                    onClick={handleEmailWebhookSim}
+                    disabled={isImporting}
+                    className="w-full py-2 bg-cardBgSecondary hover:bg-opacity-80 border border-borderGrayLight text-whiteText text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+                  >
+                    {isImporting ? 'Ingesting...' : 'Forward Webhook Email'}
+                  </button>
+                </div>
+              </div>
+
             </div>
 
-            {/* Add row button */}
-            <div className="flex gap-2">
-              <button 
-                onClick={addStreamRow}
-                className="flex-1 py-2.5 flex items-center justify-center gap-1.5 border border-dashed border-accentGold/30 hover:border-accentGold rounded-lg text-accentGold bg-cardBg/10 text-xs font-bold transition-all"
-              >
-                <Plus size={14} />
-                <span>Add Income Source</span>
-              </button>
-
-              <button 
-                onClick={handleResetData}
-                className="px-4 border border-borderGray hover:bg-cardBg/30 text-mutedText hover:text-whiteText text-xs font-bold rounded-lg transition-colors"
-              >
-                Reset List
-              </button>
-            </div>
           </div>
 
-          {/* Action button */}
+          {/* Action buttons */}
           <div className="mt-8 flex flex-col sm:flex-row gap-4 items-center justify-between w-full">
             <button 
               onClick={() => setScreen('landing')}
@@ -1285,17 +1603,25 @@ Niche benchmark: ₹${nicheBenchmark}
                         {aiRecommendations.map((rec, idx) => (
                           <div key={idx} className="bg-background border border-borderGray hover:border-accentGold/20 rounded-lg p-4 transition-all space-y-2">
                             <div className="flex justify-between items-center">
-                              <span className={`px-2 py-0.5 text-[9px] font-bold rounded ${getBadgeStyles(rec.tag)}`}>
-                                {rec.tag}
+                              <span className={`px-2 py-0.5 text-[9px] font-bold rounded ${getBadgeStyles(rec.tag || 'insight')}`}>
+                                {rec.tag || 'insight'}
                               </span>
-                              <span className="text-[11px] font-bold text-accentGold">
-                                +₹{rec.impact.toLocaleString('en-IN')}/mo
-                              </span>
+                              {typeof rec.impact === 'number' && rec.impact > 0 && (
+                                <span className="text-[11px] font-bold text-accentGold">
+                                  +₹{rec.impact.toLocaleString('en-IN')}/mo
+                                </span>
+                              )}
                             </div>
                             
                             <div className="space-y-1">
-                              <h4 className="text-xs font-bold text-whiteText">{rec.title}</h4>
+                              <h4 className="text-xs font-bold text-whiteText">{rec.title || 'Income Insight'}</h4>
                               <p className="text-[11px] text-mutedText leading-relaxed">{rec.message}</p>
+                              {rec.suggestedAction && (
+                                <div className="mt-2 p-2 rounded bg-accentGold/5 border border-accentGold/20 text-[10px] text-accentGoldMuted font-semibold flex items-center gap-1">
+                                  <span>💡 Suggested Action:</span>
+                                  <span className="text-whiteText font-medium">{rec.suggestedAction}</span>
+                                </div>
+                              )}
                             </div>
                           </div>
                         ))}

@@ -1,5 +1,10 @@
 import express from 'express';
-import { getIncomeByCreator, ALLOWED_STREAMS } from '../services/db.js';
+import { 
+  getIncomeByCreator, 
+  ALLOWED_STREAMS,
+  getUserById,
+  getCreatorProfile
+} from '../services/db.js';
 import { generateRulesRecommendations } from '../services/recommendationRules.js';
 
 const router = express.Router();
@@ -8,18 +13,37 @@ const router = express.Router();
 router.get('/:creatorId', async (req, res) => {
   try {
     const { creatorId } = req.params;
+    
+    // Retrieve the user/creator's niche configuration
+    let niche = 'Tech';
+    try {
+      const user = await getUserById(creatorId);
+      if (user && user.niche) {
+        niche = user.niche;
+      } else {
+        const profile = await getCreatorProfile(creatorId);
+        if (profile && profile.niche) {
+          niche = profile.niche;
+        }
+      }
+    } catch (dbErr) {
+      console.warn(`Could not load niche for creatorId ${creatorId}, using default 'Tech':`, dbErr.message);
+    }
+
     const records = await getIncomeByCreator(creatorId);
 
     if (!records || records.length === 0) {
-      return res.status(404).json({
-        error: 'No income records found for this creator. Seed data first.',
-        recommendations: [
-          {
-            tag: "opportunity",
-            message: "No financial records found. Setup some streams to generate recommendations.",
-            suggestedAction: "Upload a CSV, screenshot, or insert entries manually."
-          }
-        ]
+      const emptyRecs = generateRulesRecommendations({}, [], niche);
+      return res.json({
+        summary: {
+          creatorId,
+          currentMonth: new Date().toISOString().split('T')[0].substring(0, 7),
+          previousMonth: 'None',
+          totalIncome: 0,
+          overallMomChange: 'N/A',
+          streamBreakdown: {}
+        },
+        recommendations: emptyRecs
       });
     }
 
@@ -48,7 +72,7 @@ router.get('/:creatorId', async (req, res) => {
     const sortedMonths = Object.keys(monthsData).sort();
 
     // 2. Run deterministic offline recommendation rules engine
-    const recommendations = generateRulesRecommendations(monthsData, sortedMonths);
+    const recommendations = generateRulesRecommendations(monthsData, sortedMonths, niche);
 
     // Compute basic summary breakdown for current month (legacy display format support)
     const latestMonth = sortedMonths[sortedMonths.length - 1];

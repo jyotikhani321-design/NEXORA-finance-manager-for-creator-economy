@@ -19,9 +19,48 @@ function formatStreamName(streamType) {
  * @param {Array<string>} sortedMonths - Chronologically sorted array of month strings (e.g. ["2026-04", "2026-05", "2026-06"])
  * @returns {Array<Object>} List of up to 3 recommendations sorted by priority.
  */
-export function generateRulesRecommendations(monthsData, sortedMonths) {
+export function generateRulesRecommendations(monthsData, sortedMonths, niche = 'Tech') {
+  const triggeredRecs = [];
+
+  // Helper to check if a recommendation with a given title/theme is already added
+  const hasRecWithTitle = (title) => triggeredRecs.some(r => r.title.toLowerCase().includes(title.toLowerCase()));
+
+  // Unique Fallbacks
+  const fallbacks = [
+    {
+      tag: "opportunity",
+      title: "Launch Premium Newsletter",
+      message: `Establish a weekly recurring Substack or Patreon newsletter for your ${niche} audience. Onboarding even 100 dedicated members at ₹199/month builds a secure monthly cash floor.`,
+      suggestedAction: "Define subscription benefits and draft your first community post.",
+      impact: 19900,
+      priority: 0
+    },
+    {
+      tag: "opportunity",
+      title: "Build Merchandising Funnels",
+      message: `Develop print-on-demand merchandise or custom digital templates/guides tailored to ${niche} enthusiasts. This builds asset equity outside sponsorship deals.`,
+      suggestedAction: "Sketch out 3 niche-relevant designs or guidebook outlines.",
+      impact: 12000,
+      priority: -1
+    },
+    {
+      tag: "insight",
+      title: "Diversify Affiliate Placements",
+      message: `Optimize affiliate placements underneath your highest traffic content assets to convert historical views into passive streams.`,
+      suggestedAction: "Apply for 3 niche-relevant affiliate programs and update video descriptions.",
+      impact: 8000,
+      priority: -2
+    }
+  ];
+
   if (!sortedMonths || sortedMonths.length === 0) {
-    return [];
+    return fallbacks.slice(0, 3).map(item => ({
+      tag: item.tag,
+      title: item.title,
+      message: item.message,
+      suggestedAction: item.suggestedAction,
+      impact: item.impact
+    }));
   }
 
   const latestMonth = sortedMonths[sortedMonths.length - 1];
@@ -30,129 +69,132 @@ export function generateRulesRecommendations(monthsData, sortedMonths) {
   const currentTotals = monthsData[latestMonth].totals;
   const currentOverall = monthsData[latestMonth].totalOverall;
 
-  const triggeredRecs = [];
-
-  // If there's no revenue, return empty list
-  if (currentOverall === 0) {
-    return [];
-  }
-
-  // =========================================================================
-  // RULE 1: Concentration Risk Rule (Priority 4)
-  // Concentration risk: if any single stream exceeds 60% of total monthly income.
-  // =========================================================================
-  for (const [stream, amount] of Object.entries(currentTotals)) {
-    const ratio = amount / currentOverall;
-    if (ratio > 0.60) {
-      const percentage = Math.round(ratio * 100);
-      triggeredRecs.push({
-        tag: "warning",
-        title: "High Concentration Risk",
-        message: `${percentage}% of your income depends on a single stream (${formatStreamName(stream)}). This is a stability risk.`,
-        suggestedAction: "Diversify into at least one additional income stream.",
-        impact: Math.round(currentOverall * 0.15),
-        priority: 4
-      });
-    }
-  }
-
-  // =========================================================================
-  // RULE 2: Month-over-Month Decline Rule (Priority 3)
-  // MoM decline: if any stream's amount dropped more than 20% compared to previous month.
-  // =========================================================================
-  if (previousMonth) {
-    const previousTotals = monthsData[previousMonth].totals;
-    for (const [stream, currentAmount] of Object.entries(currentTotals)) {
-      const previousAmount = previousTotals[stream] || 0;
-      if (previousAmount > 0) {
-        const declinePercent = ((previousAmount - currentAmount) / previousAmount) * 100;
-        if (declinePercent > 20) {
-          triggeredRecs.push({
-            tag: "warning",
-            title: `${formatStreamName(stream)} Revenue Drop`,
-            message: `Your ${formatStreamName(stream)} income dropped ${Math.round(declinePercent)}% this month.`,
-            suggestedAction: "Review recent activity in this stream.",
-            impact: Math.round((previousAmount - currentAmount) * 0.25),
-            priority: 3
-          });
-        }
-      }
-    }
-  }
-
-  // =========================================================================
-  // RULE 3: Underutilized Stream Rule (Priority 2)
-  // Underutilized stream: if affiliate income exists but share is below 10%, 
-  // while at least 2 other streams exceed 20% of total monthly income.
-  // =========================================================================
-  const affiliateAmount = currentTotals.affiliate || 0;
-  if (affiliateAmount > 0) {
-    const affiliateShare = affiliateAmount / currentOverall;
-    if (affiliateShare < 0.10) {
-      // Check other streams that exceed 20%
-      let otherStreamsExceed20 = 0;
-      for (const [stream, amount] of Object.entries(currentTotals)) {
-        if (stream !== 'affiliate') {
-          const share = amount / currentOverall;
-          if (share > 0.20) {
-            otherStreamsExceed20++;
-          }
-        }
-      }
-
-      if (otherStreamsExceed20 >= 2) {
+  if (currentOverall > 0) {
+    // =========================================================================
+    // RULE 1: Concentration Risk Rule (Priority 4)
+    // Concentration risk: if any single stream exceeds 60% of total monthly income.
+    // =========================================================================
+    for (const [stream, amount] of Object.entries(currentTotals)) {
+      const ratio = amount / currentOverall;
+      if (ratio > 0.60) {
+        const percentage = Math.round(ratio * 100);
         triggeredRecs.push({
-          tag: "opportunity",
-          title: "Optimize Affiliate Placements",
-          message: "Your affiliate income is underutilized — diversifying here could add meaningful revenue.",
-          suggestedAction: "Add more affiliate links to recent high-engagement content.",
-          impact: Math.round(currentOverall * 0.10),
-          priority: 2
+          tag: "warning",
+          title: "High Concentration Risk",
+          message: `${percentage}% of your income depends on a single stream (${formatStreamName(stream)}). This is a stability risk.`,
+          suggestedAction: "Diversify into at least one additional income stream.",
+          impact: Math.round(currentOverall * 0.15),
+          priority: 4
         });
       }
     }
-  }
 
-  // =========================================================================
-  // RULE 4: Growth Momentum Rule (Priority 1)
-  // Growth momentum: if a stream grew more than 25% over the last 2 months consecutively.
-  // Requires at least 3 consecutive months: Month A -> Month B -> Month C
-  // =========================================================================
-  if (sortedMonths.length >= 3) {
-    const m1 = sortedMonths[sortedMonths.length - 3];
-    const m2 = sortedMonths[sortedMonths.length - 2];
-    const m3 = sortedMonths[sortedMonths.length - 1];
+    // =========================================================================
+    // RULE 2: Month-over-Month Decline Rule (Priority 3)
+    // MoM decline: if any stream's amount dropped more than 20% compared to previous month.
+    // =========================================================================
+    if (previousMonth) {
+      const previousTotals = monthsData[previousMonth].totals;
+      for (const [stream, currentAmount] of Object.entries(currentTotals)) {
+        const previousAmount = previousTotals[stream] || 0;
+        if (previousAmount > 0) {
+          const declinePercent = ((previousAmount - currentAmount) / previousAmount) * 100;
+          if (declinePercent > 20) {
+            triggeredRecs.push({
+              tag: "warning",
+              title: `${formatStreamName(stream)} Revenue Drop`,
+              message: `Your ${formatStreamName(stream)} income dropped ${Math.round(declinePercent)}% this month.`,
+              suggestedAction: "Review recent activity in this stream.",
+              impact: Math.round((previousAmount - currentAmount) * 0.25),
+              priority: 3
+            });
+          }
+        }
+      }
+    }
 
-    const totals1 = monthsData[m1].totals;
-    const totals2 = monthsData[m2].totals;
-    const totals3 = monthsData[m3].totals;
+    // =========================================================================
+    // RULE 3: Underutilized Stream Rule (Priority 2)
+    // Underutilized stream: if affiliate income exists but share is below 10%, 
+    // while at least 2 other streams exceed 20% of total monthly income.
+    // =========================================================================
+    const affiliateAmount = currentTotals.affiliate || 0;
+    if (affiliateAmount > 0) {
+      const affiliateShare = affiliateAmount / currentOverall;
+      if (affiliateShare < 0.10) {
+        // Check other streams that exceed 20%
+        let otherStreamsExceed20 = 0;
+        for (const [stream, amount] of Object.entries(currentTotals)) {
+          if (stream !== 'affiliate') {
+            const share = amount / currentOverall;
+            if (share > 0.20) {
+              otherStreamsExceed20++;
+            }
+          }
+        }
 
-    for (const stream of Object.keys(currentTotals)) {
-      const v1 = totals1[stream] || 0;
-      const v2 = totals2[stream] || 0;
-      const v3 = totals3[stream] || 0;
-
-      if (v1 > 0 && v2 > 0 && v3 > 0) {
-        const growth1 = (v2 - v1) / v1;
-        const growth2 = (v3 - v2) / v2;
-
-        if (growth1 > 0.25 && growth2 > 0.25) {
+        if (otherStreamsExceed20 >= 2) {
           triggeredRecs.push({
-            tag: "insight",
-            title: `${formatStreamName(stream)} Growth Momentum`,
-            message: `Your ${formatStreamName(stream)} income is growing consistently — consider doubling down here.`,
-            suggestedAction: "Increase focus/output on this stream.",
-            impact: Math.round(currentTotals[stream] * 0.20),
-            priority: 1
+            tag: "opportunity",
+            title: "Optimize Affiliate Placements",
+            message: "Your affiliate income is underutilized — diversifying here could add meaningful revenue.",
+            suggestedAction: "Add more affiliate links to recent high-engagement content.",
+            impact: Math.round(currentOverall * 0.10),
+            priority: 2
           });
         }
       }
+    }
+
+    // =========================================================================
+    // RULE 4: Growth Momentum Rule (Priority 1)
+    // Growth momentum: if a stream grew more than 25% over the last 2 months consecutively.
+    // Requires at least 3 consecutive months: Month A -> Month B -> Month C
+    // =========================================================================
+    if (sortedMonths.length >= 3) {
+      const m1 = sortedMonths[sortedMonths.length - 3];
+      const m2 = sortedMonths[sortedMonths.length - 2];
+      const m3 = sortedMonths[sortedMonths.length - 1];
+
+      const totals1 = monthsData[m1].totals;
+      const totals2 = monthsData[m2].totals;
+      const totals3 = monthsData[m3].totals;
+
+      for (const stream of Object.keys(currentTotals)) {
+        const v1 = totals1[stream] || 0;
+        const v2 = totals2[stream] || 0;
+        const v3 = totals3[stream] || 0;
+
+        if (v1 > 0 && v2 > 0 && v3 > 0) {
+          const growth1 = (v2 - v1) / v1;
+          const growth2 = (v3 - v2) / v2;
+
+          if (growth1 > 0.25 && growth2 > 0.25) {
+            triggeredRecs.push({
+              tag: "insight",
+              title: `${formatStreamName(stream)} Growth Momentum`,
+              message: `Your ${formatStreamName(stream)} income is growing consistently — consider doubling down here.`,
+              suggestedAction: "Increase focus/output on this stream.",
+              impact: Math.round(currentTotals[stream] * 0.20),
+              priority: 1
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // Add fallbacks to fill remaining slots up to 3 recommendations
+  for (const fb of fallbacks) {
+    if (triggeredRecs.length >= 3) break;
+    if (!hasRecWithTitle(fb.title)) {
+      triggeredRecs.push(fb);
     }
   }
 
   // =========================================================================
   // PRIORITY SORT & DEDUPLICATION
-  // Sort by priority DESC: Concentration (4) > Decline (3) > Opportunity (2) > Growth (1)
+  // Sort by priority DESC: Concentration (4) > Decline (3) > Opportunity (2) > Growth (1) > Fallbacks (<= 0)
   // =========================================================================
   triggeredRecs.sort((a, b) => b.priority - a.priority);
 

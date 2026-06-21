@@ -1,6 +1,7 @@
 import sqlite3 from 'sqlite3';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import crypto from 'crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -64,6 +65,16 @@ export async function initDb() {
       creatorName TEXT,
       niche TEXT,
       incomeStreams TEXT -- Stored as JSON string
+    )
+  `);
+
+  await queryRun(`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      email TEXT UNIQUE,
+      password TEXT,
+      displayName TEXT,
+      niche TEXT
     )
   `);
 }
@@ -251,3 +262,42 @@ export async function seedIfEmpty() {
 
   console.log('SQLite database seed completed successfully.');
 }
+
+// ==========================================
+// AUTHENTICATION UTILITY FUNCTIONS
+// ==========================================
+
+export function hashPassword(password) {
+  return crypto.createHash('sha256').update(password).digest('hex');
+}
+
+export async function getUserByEmail(email) {
+  return await queryGet(`
+    SELECT * FROM users WHERE email = ?
+  `, [String(email).toLowerCase().trim()]);
+}
+
+export async function createUser(email, password, displayName, niche) {
+  const hashedPassword = hashPassword(password);
+  const id = `usr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const normalizedEmail = String(email).toLowerCase().trim();
+
+  await queryRun(`
+    INSERT INTO users (id, email, password, displayName, niche)
+    VALUES (?, ?, ?, ?, ?)
+  `, [id, normalizedEmail, hashedPassword, displayName, niche]);
+
+  return {
+    id,
+    email: normalizedEmail,
+    displayName,
+    niche
+  };
+}
+
+export async function getUserById(id) {
+  return await queryGet(`
+    SELECT id, email, displayName, niche FROM users WHERE id = ?
+  `, [String(id)]);
+}
+

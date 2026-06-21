@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 import { initDb, seedIfEmpty, getCreatorProfile, saveCreatorProfile } from './services/db.js';
 import incomeRoutes from './routes/income.js';
 import recommendationsRoutes from './routes/recommendations.js';
+import authRoutes from './routes/auth.js';
 
 // Load env variables
 dotenv.config();
@@ -49,11 +50,13 @@ try {
 // -------------------------------------------------------------
 app.use('/api/income', incomeRoutes);
 app.use('/api/recommendations', recommendationsRoutes);
+app.use('/api/auth', authRoutes);
 
 // Backwards-compatibility legacy endpoints (so the current frontend React UI is unaffected)
 app.get('/api/creator', async (req, res) => {
   try {
-    const profile = await getCreatorProfile('creator_1');
+    const creatorId = req.query.creatorId || 'creator_1';
+    const profile = await getCreatorProfile(creatorId);
     res.json(profile);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -63,7 +66,8 @@ app.get('/api/creator', async (req, res) => {
 app.post('/api/creator', async (req, res) => {
   try {
     const { creatorName, niche, incomeStreams } = req.body;
-    const profile = await saveCreatorProfile('creator_1', { creatorName, niche, incomeStreams });
+    const creatorId = req.query.creatorId || 'creator_1';
+    const profile = await saveCreatorProfile(creatorId, { creatorName, niche, incomeStreams });
     res.json({ message: 'Creator profile saved successfully!', data: profile });
   } catch (error) {
     res.status(500).json({ error: error.message });

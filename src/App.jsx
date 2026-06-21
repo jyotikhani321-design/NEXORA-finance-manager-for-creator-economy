@@ -157,21 +157,51 @@ const generateLocalRecommendations = (name, niche, streams, totalEarnings, topSt
     });
   }
 
-  // Keep adding fallback recommendations if they don't hit the standard rules, to guarantee exactly 3 objects
-  while (recommendations.length < 3) {
-    recommendations.push({
+  // Add unique fallbacks to fill remaining slots up to 3 recommendations
+  const hasRecWithTitle = (title) => recommendations.some(r => r.title.toLowerCase().includes(title.toLowerCase()));
+
+  const fallbacks = [
+    {
       tag: "Opportunity",
-      title: "Establish Merchandising Pipelines",
-      message: `Build a print-on-demand product funnel targeting your highly engaged ${niche} audience, expanding your non-sponsorship asset base.`,
-      impact: 15000
-    });
+      title: "Launch Premium Newsletter",
+      message: `Establish a weekly recurring Substack or Patreon newsletter for your ${niche} audience. Onboarding even 100 dedicated members at ₹199/month builds a secure monthly cash floor.`,
+      suggestedAction: "Define subscription benefits and draft your first community post.",
+      impact: 19900
+    },
+    {
+      tag: "Opportunity",
+      title: "Build Merchandising Funnels",
+      message: `Develop print-on-demand merchandise or custom digital templates/guides tailored to ${niche} enthusiasts. This builds asset equity outside sponsorship deals.`,
+      suggestedAction: "Sketch out 3 niche-relevant designs or guidebook outlines.",
+      impact: 12000
+    },
+    {
+      tag: "Insight",
+      title: "Diversify Affiliate Placements",
+      message: `Optimize affiliate placements underneath your highest traffic content assets to convert historical views into passive streams.`,
+      suggestedAction: "Apply for 3 niche-relevant affiliate programs and update video descriptions.",
+      impact: 8000
+    }
+  ];
+
+  for (const fb of fallbacks) {
+    if (recommendations.length >= 3) break;
+    if (!hasRecWithTitle(fb.title)) {
+      recommendations.push(fb);
+    }
   }
 
   return recommendations.slice(0, 3);
 };
 
 export default function App() {
-  // Screens state: 'landing' | 'input' | 'dashboard'
+  // User auth state
+  const [user, setUser] = useState(() => {
+    const saved = localStorage.getItem('nexora_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  // Screens state: 'landing' | 'input' | 'dashboard' | 'login' | 'signup'
   const [screen, setScreen] = useState('landing');
   
   // User input states
@@ -182,6 +212,113 @@ export default function App() {
     { id: '2', platform: '', earnings: '', hours: '' },
     { id: '3', platform: '', earnings: '', hours: '' }
   ]);
+
+  // Auth form states
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+
+  const [signupName, setSignupName] = useState('');
+  const [signupNiche, setSignupNiche] = useState('Tech');
+  const [signupEmail, setSignupEmail] = useState('');
+  const [signupPassword, setSignupPassword] = useState('');
+  const [signupError, setSignupError] = useState('');
+  const [signupLoading, setSignupLoading] = useState(false);
+
+  const mapDropdownToBackend = (platformName) => {
+    switch (platformName) {
+      case 'YouTube AdSense': return 'adsense';
+      case 'Instagram Brand Deal': return 'brand_deal';
+      case 'Amazon Affiliate': return 'affiliate';
+      case 'Substack': return 'subscription';
+      case 'Patreon': return 'subscription';
+      case 'Razorpay': return 'merch';
+      default: return 'merch';
+    }
+  };
+
+  const handleLoginSubmit = async (e) => {
+    e.preventDefault();
+    if (!loginEmail || !loginPassword) {
+      setLoginError('Please enter both email and password.');
+      return;
+    }
+    setLoginLoading(true);
+    setLoginError('');
+    try {
+      const response = await fetch('http://localhost:5000/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: loginEmail, password: loginPassword })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        localStorage.setItem('nexora_user', JSON.stringify(data.user));
+        setUser(data.user);
+        setScreen('dashboard');
+        // Reset form
+        setLoginEmail('');
+        setLoginPassword('');
+      } else {
+        const errData = await response.json();
+        setLoginError(errData.error || 'Login failed.');
+      }
+    } catch (err) {
+      console.error(err);
+      setLoginError('Connection error to auth server.');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handleSignupSubmit = async (e) => {
+    e.preventDefault();
+    if (!signupEmail || !signupPassword || !signupName || !signupNiche) {
+      setSignupError('Please fill in all fields.');
+      return;
+    }
+    if (signupPassword.length < 6) {
+      setSignupError('Password must be at least 6 characters long.');
+      return;
+    }
+    setSignupLoading(true);
+    setSignupError('');
+    try {
+      const response = await fetch('http://localhost:5000/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: signupEmail,
+          password: signupPassword,
+          displayName: signupName,
+          niche: signupNiche
+        })
+      });
+      if (response.ok) {
+        alert('Registration successful! Please log in.');
+        setScreen('login');
+        // Reset form
+        setSignupEmail('');
+        setSignupPassword('');
+        setSignupName('');
+      } else {
+        const errData = await response.json();
+        setSignupError(errData.error || 'Signup failed.');
+      }
+    } catch (err) {
+      console.error(err);
+      setSignupError('Connection error to auth server.');
+    } finally {
+      setSignupLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('nexora_user');
+    setUser(null);
+    setScreen('landing');
+  };
 
   // Optional API key states
   const [apiKey, setApiKey] = useState('');
@@ -223,9 +360,9 @@ export default function App() {
     }
     setIsImporting(true);
     setImportSummary(null);
-    const formData = new FormData();
+        const formData = new FormData();
     formData.append('file', csvFile);
-    formData.append('creatorId', 'creator_1');
+    formData.append('creatorId', user?.id || 'creator_1');
 
     try {
       const response = await fetch('http://localhost:5000/api/income/csv-upload', {
@@ -254,9 +391,9 @@ export default function App() {
       return;
     }
     setIsImporting(true);
-    const formData = new FormData();
+        const formData = new FormData();
     formData.append('image', screenshotFile);
-    formData.append('creatorId', 'creator_1');
+    formData.append('creatorId', user?.id || 'creator_1');
 
     try {
       const response = await fetch('http://localhost:5000/api/income/screenshot', {
@@ -297,7 +434,7 @@ export default function App() {
           from: emailSender,
           subject: 'Payment Confirmation Detail',
           bodyText: emailText,
-          creatorId: 'creator_1'
+          creatorId: user?.id || 'creator_1'
         })
       });
       if (response.ok) {
@@ -340,30 +477,58 @@ export default function App() {
     return () => clearInterval(interval);
   }, [isLoadingAI]);
 
-  // Load saved profile data from backend database on startup
+  // Load saved profile data when user context is authenticated
   useEffect(() => {
-    async function loadSavedData() {
-      try {
-        const response = await fetch('http://localhost:5000/api/creator');
-        if (response.ok) {
-          const data = await response.json();
-          if (data.creatorName) {
-            setCreatorName(data.creatorName);
+    if (user) {
+      setCreatorName(user.displayName);
+      setNiche(user.niche);
+      
+      async function loadSavedData() {
+        try {
+          const response = await fetch(`http://localhost:5000/api/creator?creatorId=${user.id}`);
+          if (response.ok) {
+            const data = await response.json();
+            if (data.creatorName) {
+              setCreatorName(data.creatorName);
+            }
+            if (data.niche) {
+              setNiche(data.niche);
+            }
+            if (data.incomeStreams && data.incomeStreams.length > 0) {
+              setIncomeStreams(data.incomeStreams);
+            }
+            console.log('Successfully loaded profile data from server');
           }
-          if (data.niche) {
-            setNiche(data.niche);
-          }
-          if (data.incomeStreams && data.incomeStreams.length > 0) {
-            setIncomeStreams(data.incomeStreams);
-          }
-          console.log('Successfully loaded profile data from server');
+        } catch (error) {
+          console.warn('Backend server profile read error:', error);
         }
-      } catch (error) {
-        console.warn('Backend server not detected or offline. Using local frontend-only state.', error);
+
+        // Auto-fetch recommendations on page reload/refresh
+        try {
+          const recResponse = await fetch(`http://localhost:5000/api/recommendations/${user.id}`);
+          if (recResponse.ok) {
+            const recData = await recResponse.json();
+            if (recData.recommendations && Array.isArray(recData.recommendations)) {
+              setAiRecommendations(recData.recommendations);
+              setIsUsingFallback(false);
+              console.log('Successfully loaded recommendations from server on refresh');
+            }
+          }
+        } catch (recError) {
+          console.warn('Failed to load recommendations on refresh:', recError);
+        }
       }
+      loadSavedData();
+    } else {
+      setCreatorName('');
+      setIncomeStreams([
+        { id: '1', platform: '', earnings: '', hours: '' },
+        { id: '2', platform: '', earnings: '', hours: '' },
+        { id: '3', platform: '', earnings: '', hours: '' }
+      ]);
+      setAiRecommendations([]);
     }
-    loadSavedData();
-  }, []);
+  }, [user]);
 
   // Handle stream list modifications
   const addStreamRow = () => {
@@ -408,7 +573,7 @@ export default function App() {
     ]);
     setAiRecommendations([]);
     try {
-      await fetch("http://localhost:5000/api/creator", {
+      await fetch(`http://localhost:5000/api/creator?creatorId=${user?.id || 'creator_1'}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ creatorName: '', niche: 'Tech', incomeStreams: [] })
@@ -529,7 +694,7 @@ export default function App() {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                creatorId: 'creator_1',
+                creatorId: user?.id || 'creator_1',
                 streamType: mappedStreamType,
                 amount: parseFloat(stream.earnings),
                 month: '2026-06',
@@ -562,7 +727,7 @@ Niche benchmark: ₹${nicheBenchmark}
 
     // 2. Save profile legacy info to backend
     try {
-      await fetch("http://localhost:5000/api/creator", {
+      await fetch(`http://localhost:5000/api/creator?creatorId=${user?.id || 'creator_1'}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ creatorName, niche, incomeStreams })
@@ -576,7 +741,7 @@ Niche benchmark: ₹${nicheBenchmark}
     let recommendationsObtained = false;
     
     try {
-      const response = await fetch("http://localhost:5000/api/recommendations/creator_1");
+      const response = await fetch(`http://localhost:5000/api/recommendations/${user?.id || 'creator_1'}`);
 
       if (response.ok) {
         const data = await response.json();
@@ -727,13 +892,19 @@ Niche benchmark: ₹${nicheBenchmark}
               About
             </button>
             <button 
-              onClick={() => setScreen('input')}
+              onClick={() => {
+                if (!user) setScreen('login');
+                else setScreen('input');
+              }}
               className={`px-2 md:px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${screen === 'input' ? 'text-accentGold' : 'text-mutedText hover:text-whiteText'}`}
             >
               Setup Streams
             </button>
             <button 
-              onClick={() => setScreen('dashboard')}
+              onClick={() => {
+                if (!user) setScreen('login');
+                else setScreen('dashboard');
+              }}
               className={`px-2 md:px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${screen === 'dashboard' ? 'text-accentGold' : 'text-mutedText hover:text-whiteText'}`}
             >
               Dashboard
@@ -742,22 +913,30 @@ Niche benchmark: ₹${nicheBenchmark}
 
           {/* User profile action */}
           <div className="flex items-center gap-2">
-            {creatorName ? (
-              <div 
-                onClick={() => setScreen('dashboard')}
-                className="flex items-center gap-2 cursor-pointer group"
-                title="Go to dashboard"
-              >
-                <div className="w-7 h-7 rounded-full bg-accentGold text-background flex items-center justify-center font-bold text-xs group-hover:scale-105 transition-transform">
-                  {creatorName.substring(0, 2).toUpperCase()}
+            {user ? (
+              <div className="flex items-center gap-2">
+                <div 
+                  onClick={() => setScreen('dashboard')}
+                  className="flex items-center gap-2 cursor-pointer group"
+                  title="Go to dashboard"
+                >
+                  <div className="w-7 h-7 rounded-full bg-accentGold text-background flex items-center justify-center font-bold text-xs group-hover:scale-105 transition-transform">
+                    {user.displayName.substring(0, 2).toUpperCase()}
+                  </div>
+                  <span className="hidden md:inline-block text-xs font-medium text-mutedText group-hover:text-whiteText transition-colors">
+                    {user.displayName}
+                  </span>
                 </div>
-                <span className="hidden md:inline-block text-xs font-medium text-mutedText group-hover:text-whiteText transition-colors">
-                  {creatorName}
-                </span>
+                <button
+                  onClick={handleLogout}
+                  className="px-2 py-1 border border-zinc-800 text-[10px] text-red-400 hover:bg-red-500/10 rounded font-semibold transition-colors ml-1"
+                >
+                  Logout
+                </button>
               </div>
             ) : (
               <button 
-                onClick={() => setScreen('input')}
+                onClick={() => setScreen('login')}
                 className="px-3.5 py-1.5 bg-accentGold text-background font-bold text-xs rounded-lg hover:bg-opacity-95 transition-all flex items-center gap-1.5 shadow-sm"
               >
                 <span>Connect</span>
@@ -854,60 +1033,48 @@ Niche benchmark: ₹${nicheBenchmark}
                 </div>
               )}
 
-              {/* Name Niche Box */}
-              <div className="w-full bg-cardBg border border-borderGrayLight rounded-xl p-8 shadow-xl text-left space-y-6">
-                <div>
-                  <h2 className="text-xl font-bold font-serif text-whiteText">Get Started</h2>
-                  <p className="text-xs text-mutedText">Analyze your digital creator balance sheet.</p>
-                </div>
-
-                <div className="space-y-4">
+              {/* Connection interface / auth options */}
+              {user ? (
+                <div className="w-full bg-cardBg border border-borderGrayLight rounded-xl p-8 shadow-xl text-left space-y-6">
                   <div>
-                    <label className="block text-[10px] font-bold text-mutedText uppercase tracking-wider mb-1.5">
-                      Your Name
-                    </label>
-                    <input 
-                      type="text" 
-                      placeholder="e.g. Priya Sharma" 
-                      value={creatorName}
-                      onChange={(e) => setCreatorName(e.target.value)}
-                      className="w-full px-4 py-3 rounded-lg border border-borderGray bg-background text-whiteText text-sm placeholder-mutedText/40 focus:outline-none focus:border-accentGold transition-all"
-                    />
+                    <h2 className="text-xl font-bold font-serif text-whiteText">Workspace Ready</h2>
+                    <p className="text-xs text-mutedText">Analyze your digital creator balance sheet.</p>
                   </div>
-
+                  <div className="p-4 bg-background border border-borderGray rounded-lg text-xs text-mutedText leading-relaxed">
+                    Connected creator: <span className="text-whiteText font-bold">{user.displayName}</span> • <span className="text-accentGold font-bold">{user.niche} Niche</span>
+                  </div>
+                  <button 
+                    onClick={() => setScreen('dashboard')}
+                    className="w-full flex items-center justify-center gap-2 py-3.5 bg-accentGold text-background hover:bg-opacity-95 font-bold rounded-lg transition-all shadow-md group"
+                  >
+                    <span>Go to Dashboard</span>
+                    <ArrowRight size={16} className="group-hover:translate-x-0.5 transition-transform" />
+                  </button>
+                </div>
+              ) : (
+                <div className="w-full bg-cardBg border border-borderGrayLight rounded-xl p-8 shadow-xl text-left space-y-6">
                   <div>
-                    <label className="block text-[10px] font-bold text-mutedText uppercase tracking-wider mb-1.5">
-                      Select your niche
-                    </label>
-                    <div className="relative">
-                      <select 
-                        value={niche}
-                        onChange={(e) => setNiche(e.target.value)}
-                        className="w-full appearance-none px-4 py-3 rounded-lg border border-borderGray bg-background text-whiteText text-sm focus:outline-none focus:border-accentGold transition-all cursor-pointer"
-                      >
-                        <option value="Tech">Tech</option>
-                        <option value="Finance">Finance</option>
-                        <option value="Lifestyle">Lifestyle</option>
-                        <option value="Gaming">Gaming</option>
-                        <option value="Fashion">Fashion</option>
-                        <option value="Food">Food</option>
-                        <option value="Education">Education</option>
-                      </select>
-                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-mutedText">
-                        ▼
-                      </div>
-                    </div>
+                    <h2 className="text-xl font-bold font-serif text-whiteText">Get Started</h2>
+                    <p className="text-xs text-mutedText">Analyze your digital creator balance sheet.</p>
+                  </div>
+                  <p className="text-xs text-mutedText">Sign in to query peer benchmarks, map files, and build active ledgers offline.</p>
+                  <div className="space-y-3">
+                    <button 
+                      onClick={() => setScreen('login')}
+                      className="w-full flex items-center justify-center gap-2 py-3.5 bg-accentGold text-background hover:bg-opacity-95 font-bold rounded-lg transition-all shadow-md group"
+                    >
+                      <span>Sign In to Nexora</span>
+                      <ArrowRight size={16} className="group-hover:translate-x-0.5 transition-transform" />
+                    </button>
+                    <button 
+                      onClick={() => setScreen('signup')}
+                      className="w-full py-3 border border-borderGray hover:border-accentGold/40 text-whiteText text-xs font-semibold rounded-lg transition-all hover:bg-zinc-900/30 text-center"
+                    >
+                      Create Creator Account
+                    </button>
                   </div>
                 </div>
-
-                <button 
-                  onClick={() => setScreen('input')}
-                  className="w-full flex items-center justify-center gap-2 py-3.5 bg-accentGold text-background hover:bg-opacity-95 font-bold rounded-lg transition-all shadow-md group"
-                >
-                  <span>Get Started</span>
-                  <ArrowRight size={16} className="group-hover:translate-x-0.5 transition-transform" />
-                </button>
-              </div>
+              )}
             </div>
           </main>
 
@@ -973,6 +1140,155 @@ Niche benchmark: ₹${nicheBenchmark}
             </div>
           </section>
 
+        </div>
+      )}
+
+      {/* ===================================================
+          SCREEN: LOGIN
+          =================================================== */}
+      {screen === 'login' && (
+        <div className="fade-in max-w-md mx-auto px-4 pt-16 pb-24">
+          <div className="w-full bg-cardBg border border-borderGrayLight rounded-xl p-8 shadow-xl text-left space-y-6">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold font-serif text-whiteText">Sign In to <span className="text-accentGold">NEXORA</span></h2>
+              <p className="text-xs text-mutedText mt-1">Enter your credentials to access your creator workspace.</p>
+            </div>
+            
+            {loginError && (
+              <div className="p-3 bg-red-950/20 border border-red-900/40 rounded-lg text-red-200 text-xs font-semibold flex items-center gap-2">
+                <AlertCircle size={14} className="text-red-400 shrink-0" />
+                <span>{loginError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleLoginSubmit} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold text-mutedText uppercase tracking-wider mb-1">Email Address</label>
+                <input 
+                  type="email" 
+                  value={loginEmail}
+                  onChange={(e) => setLoginEmail(e.target.value)}
+                  placeholder="you@creator.com"
+                  className="w-full px-3 py-2 rounded-lg border border-borderGray bg-background text-whiteText text-xs focus:outline-none focus:border-accentGold transition-all font-semibold animate-fadeIn"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-mutedText uppercase tracking-wider mb-1">Password</label>
+                <input 
+                  type="password" 
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="••••••••••••"
+                  className="w-full px-3 py-2 rounded-lg border border-borderGray bg-background text-whiteText text-xs focus:outline-none focus:border-accentGold transition-all"
+                  required
+                />
+              </div>
+
+              <button 
+                type="submit"
+                disabled={loginLoading}
+                className="w-full py-2.5 bg-accentGold text-background hover:bg-opacity-95 font-bold rounded-lg text-xs transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                <span>{loginLoading ? 'Authenticating...' : 'Sign In'}</span>
+              </button>
+            </form>
+
+            <div className="text-center pt-2 text-xs text-mutedText font-semibold">
+              <span>New to Nexora? </span>
+              <button onClick={() => setScreen('signup')} className="text-accentGold font-bold hover:underline">Create creator account</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===================================================
+          SCREEN: SIGNUP
+          =================================================== */}
+      {screen === 'signup' && (
+        <div className="fade-in max-w-md mx-auto px-4 pt-12 pb-24">
+          <div className="w-full bg-cardBg border border-borderGrayLight rounded-xl p-8 shadow-xl text-left space-y-6">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold font-serif text-whiteText">Create <span className="text-accentGold">NEXORA</span> ID</h2>
+              <p className="text-xs text-mutedText mt-1">Register your profile to track monetization metrics.</p>
+            </div>
+
+            {signupError && (
+              <div className="p-3 bg-red-950/20 border border-red-900/40 rounded-lg text-red-200 text-xs font-semibold flex items-center gap-2">
+                <AlertCircle size={14} className="text-red-400 shrink-0" />
+                <span>{signupError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSignupSubmit} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold text-mutedText uppercase tracking-wider mb-1">Display Name</label>
+                <input 
+                  type="text" 
+                  value={signupName}
+                  onChange={(e) => setSignupName(e.target.value)}
+                  placeholder="e.g. Priya Sharma"
+                  className="w-full px-3 py-2 rounded-lg border border-borderGray bg-background text-whiteText text-xs focus:outline-none focus:border-accentGold transition-all font-semibold"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-mutedText uppercase tracking-wider mb-1">Niche Category</label>
+                <select 
+                  value={signupNiche}
+                  onChange={(e) => setSignupNiche(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-borderGray bg-background text-whiteText text-xs focus:outline-none focus:border-accentGold transition-all font-semibold cursor-pointer"
+                >
+                  <option value="Tech">Tech</option>
+                  <option value="Finance">Finance</option>
+                  <option value="Lifestyle">Lifestyle</option>
+                  <option value="Gaming">Gaming</option>
+                  <option value="Fashion">Fashion</option>
+                  <option value="Food">Food</option>
+                  <option value="Education">Education</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-mutedText uppercase tracking-wider mb-1">Email Address</label>
+                <input 
+                  type="email" 
+                  value={signupEmail}
+                  onChange={(e) => setSignupEmail(e.target.value)}
+                  placeholder="you@creator.com"
+                  className="w-full px-3 py-2 rounded-lg border border-borderGray bg-background text-whiteText text-xs focus:outline-none focus:border-accentGold transition-all font-semibold"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-mutedText uppercase tracking-wider mb-1">Password</label>
+                <input 
+                  type="password" 
+                  value={signupPassword}
+                  onChange={(e) => setSignupPassword(e.target.value)}
+                  placeholder="At least 6 characters"
+                  className="w-full px-3 py-2 rounded-lg border border-borderGray bg-background text-whiteText text-xs focus:outline-none focus:border-accentGold transition-all"
+                  required
+                />
+              </div>
+
+              <button 
+                type="submit"
+                disabled={signupLoading}
+                className="w-full py-2.5 bg-accentGold text-background hover:bg-opacity-95 font-bold rounded-lg text-xs transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                <span>{signupLoading ? 'Registering...' : 'Register Profile'}</span>
+              </button>
+            </form>
+
+            <div className="text-center pt-2 text-xs text-mutedText font-semibold">
+              <span>Already registered? </span>
+              <button onClick={() => setScreen('login')} className="text-accentGold font-bold hover:underline">Sign In here</button>
+            </div>
+          </div>
         </div>
       )}
 
